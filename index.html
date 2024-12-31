@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Server Stats Leaderboard</title>
+    <style>
+        body {
+            font-family: Consolas, "Courier New", monospace;
+            background-color: #1e1e1e;
+            color: #c0c0c0;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #ffa500;
+        }
+        .search-bar {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .search-input {
+            padding: 8px;
+            font-size: 16px;
+            width: 50%;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background-color: #2b2b2b;
+            color: #c0c0c0;
+        }
+        .leaderboard {
+            margin-top: 20px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background-color: #2b2b2b;
+            padding: 15px;
+        }
+        .category {
+            margin-bottom: 20px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .category-header {
+            cursor: pointer;
+            background-color: #444;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #ffa500;
+        }
+        .category-content {
+            display: none;
+            padding-top: 10px;
+        }
+        .category-header:hover {
+            background-color: #555;
+        }
+        .top-stat {
+            color: #4caf50;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-entry {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+        }
+        .stat-entry-bar {
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .player-bar {
+            display: inline-block;
+            padding: 5px;
+            border-radius: 5px;
+            color: #fff;
+            cursor: pointer;
+            margin-right: 5px;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .player-bar:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .tooltip {
+            visibility: hidden;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            padding: 5px;
+            border-radius: 5px;
+            position: absolute;
+            z-index: 1;
+        }
+        .player-bar:hover .tooltip {
+            visibility: visible;
+        }
+    </style>
+</head>
+<body>
+    <h1>Minecraft Server Stats Leaderboard</h1>
+    <div class="search-bar">
+        <input
+            type="text"
+            class="search-input"
+            id="search-bar"
+            placeholder="Search for a stat (e.g., Stone, Killed)...">
+    </div>
+    <div class="leaderboard" id="leaderboard"></div>
+
+    <script>
+        const playerColors = [
+            '#b34b4b', '#66b366', '#ffd966', '#6686b3', '#ff9966',
+            '#b366b3', '#66c2cc', '#cc66b3', '#c2e59c', '#fcc3c3'
+        ];
+        const players = [
+            "Dorami", "Flavius", "Koggomk", "LightFlavored", "Mika", "Puvish", "Raptor", "Reza", "Tuna"
+        ];
+
+        async function fetchAllPlayerData() {
+            const data = {};
+            for (let i = 0; i < players.length; i++) {
+                const player = players[i];
+                const color = playerColors[i % playerColors.length];
+                const path = `./PlayerStatsCircusV2/${player}.json`;
+                try {
+                    const response = await fetch(path);
+                    if (!response.ok) throw new Error(`Failed to load ${player}.json`);
+                    const json = await response.json();
+                    data[player] = { color, stats: json.stats };
+                } catch (error) {
+                    console.error(error.message);
+                }
+            }
+            return data;
+        }
+
+        function processStats(data) {
+            const categories = {};
+
+            for (const player in data) {
+                const { stats } = data[player];
+                for (const category in stats) {
+                    if (!categories[category]) categories[category] = {};
+                    for (const stat in stats[category]) {
+                        const readableStat = stat.replace('minecraft:', '').replace(/_/g, ' ');
+                        if (!categories[category][readableStat]) categories[category][readableStat] = [];
+                        categories[category][readableStat].push({
+                            player,
+                            value: stats[category][stat],
+                            color: data[player].color
+                        });
+                    }
+                }
+            }
+            return categories;
+        }
+
+        function renderLeaderboard(categories) {
+            const leaderboard = document.getElementById('leaderboard');
+            leaderboard.innerHTML = ''; // Clear old content
+            for (const category in categories) {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.classList.add('category');
+
+                const categoryHeader = document.createElement('div');
+                categoryHeader.classList.add('category-header');
+                categoryHeader.textContent = category;
+                categoryHeader.addEventListener('click', () => {
+                    const content = categoryDiv.querySelector('.category-content');
+                    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+                });
+
+                const categoryContent = document.createElement('div');
+                categoryContent.classList.add('category-content');
+                categoryContent.style.display = 'none';
+
+                for (const stat in categories[category]) {
+                    const sortedStats = categories[category][stat].sort((a, b) => b.value - a.value);
+
+                    const mostStat = sortedStats[0];
+                    const topStatDiv = document.createElement('div');
+                    topStatDiv.classList.add('top-stat');
+                    topStatDiv.textContent = `Most ${stat}: ${mostStat.player} with ${mostStat.value}`;
+                    categoryContent.appendChild(topStatDiv);
+
+                    const statDiv = document.createElement('div');
+                    statDiv.classList.add('stat-entry');
+                    statDiv.innerHTML = `<span>${stat}:</span>`;
+
+                    const statBar = document.createElement('div');
+                    statBar.classList.add('stat-entry-bar');
+
+                    sortedStats.forEach(({ player, value, color }) => {
+                        const playerSpan = document.createElement('span');
+                        playerSpan.style.backgroundColor = color;
+                        playerSpan.textContent = `${value}`;
+                        playerSpan.title = player;
+                        playerSpan.classList.add('player-bar');
+
+                        const tooltip = document.createElement('span');
+                        tooltip.classList.add('tooltip');
+                        tooltip.textContent = player;
+
+                        playerSpan.appendChild(tooltip);
+                        statBar.appendChild(playerSpan);
+                    });
+
+                    statDiv.appendChild(statBar);
+                    categoryContent.appendChild(statDiv);
+                }
+
+                categoryDiv.appendChild(categoryHeader);
+                categoryDiv.appendChild(categoryContent);
+                leaderboard.appendChild(categoryDiv);
+            }
+        }
+
+        function addSearchFilter(categories) {
+            const searchBar = document.getElementById('search-bar');
+            searchBar.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                const leaderboard = document.getElementById('leaderboard');
+                leaderboard.innerHTML = ''; // Clear current leaderboard
+
+                for (const category in categories) {
+                    const filteredCategory = {};
+                    for (const stat in categories[category]) {
+                        if (stat.toLowerCase().includes(query)) {
+                            filteredCategory[stat] = categories[category][stat];
+                        }
+                    }
+                    if (Object.keys(filteredCategory).length > 0) {
+                        renderLeaderboard({ [category]: filteredCategory });
+                    }
+                }
+            });
+        }
+
+        async function initLeaderboard() {
+            const data = await fetchAllPlayerData();
+            const categories = processStats(data);
+            renderLeaderboard(categories);
+            addSearchFilter(categories);
+        }
+
+        initLeaderboard();
+    </script>
+</body>
+</html>
